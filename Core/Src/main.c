@@ -24,6 +24,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+#include "FreeRTOS_IP.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,7 +51,15 @@ UART_HandleTypeDef huart3;
 
 osThreadId defaultTaskHandle;
 /* USER CODE BEGIN PV */
+static const uint8_t ucIPAddress[ 4 ] = { 10, 41, 16, 253 };
+static const uint8_t ucNetMask[ 4 ] = { 255, 255, 255, 0 };
+static const uint8_t ucGatewayAddress[ 4 ] = { 10, 41, 16, 1 };
+static const uint8_t ucDNSServerAddress[ 4 ] = { 10, 13, 0, 18 };
 
+static const uint8_t ucMACAddress[ 6 ] = { 0x00, 0x11, 0x22, 0x33, 0x44, 0x46 };
+static UBaseType_t ulNextRand;
+static BaseType_t xDoCreateSockets;
+static BaseType_t xTasksAlreadyCreated = pdFALSE;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -62,6 +71,8 @@ void StartDefaultTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
+static void prvInitialiseHeap( void );
+static void prvSRand( UBaseType_t ulSeed );
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -102,6 +113,8 @@ int main(void)
   MX_RNG_Init();
   /* USER CODE BEGIN 2 */
 
+  prvInitialiseHeap();
+  FreeRTOS_IPInit( ucIPAddress, ucNetMask, ucGatewayAddress, ucDNSServerAddress, ucMACAddress );
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -278,7 +291,182 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+static void prvInitialiseHeap( void )
+{
+extern uint8_t __bss_end__, _estack;
+#define HEAP_START		__bss_end__
+#define HEAP_END		_estack
 
+volatile uint32_t ulHeapSize;
+volatile uint8_t *pucHeapStart;
+
+	/* Heap_5 is used so the maximum heap size can be calculated and initialised
+	at run time. */
+	pucHeapStart = ( uint8_t * ) ( ( ( ( uint32_t ) &HEAP_START ) + 7 ) & ~0x07ul );
+
+	ulHeapSize = ( uint32_t ) ( &HEAP_END - &HEAP_START );
+	ulHeapSize &= ~0x07ul;
+	ulHeapSize -= 1024;
+
+	HeapRegion_t xHeapRegions[] =
+	{
+		{ ( unsigned char *) pucHeapStart, ulHeapSize },
+		{ NULL, 0 }
+ 	};
+
+	vPortDefineHeapRegions( xHeapRegions );
+}
+
+/* Called by FreeRTOS+TCP when the network connects or disconnects.  Disconnect
+events are only received if implemented in the MAC driver. */
+void vApplicationIPNetworkEventHook( eIPCallbackEvent_t eNetworkEvent )
+{
+uint32_t ulIPAddress, ulNetMask, ulGatewayAddress, ulDNSServerAddress;
+char cBuffer[ 16 ];
+
+	FreeRTOS_printf( ( "vApplicationIPNetworkEventHook: event %ld\n", eNetworkEvent ) );
+
+	/* If the network has just come up...*/
+	if( eNetworkEvent == eNetworkUp )
+	{
+		/* Create the tasks that use the IP stack if they have not already been
+		created. */
+		if( xTasksAlreadyCreated == pdFALSE )
+		{
+			/* Tasks that use the TCP/IP stack can be created here. */
+			xTasksAlreadyCreated = pdTRUE;
+			xDoCreateSockets = pdTRUE;
+		}
+
+		/* Print out the network configuration, which may have come from a DHCP
+		server. */
+		FreeRTOS_GetAddressConfiguration( &ulIPAddress, &ulNetMask, &ulGatewayAddress, &ulDNSServerAddress );
+		FreeRTOS_inet_ntoa( ulIPAddress, cBuffer );
+		FreeRTOS_printf( ( "IP Address: %s\n", cBuffer ) );
+
+		FreeRTOS_inet_ntoa( ulNetMask, cBuffer );
+		FreeRTOS_printf( ( "Subnet Mask: %s\n", cBuffer ) );
+
+		FreeRTOS_inet_ntoa( ulGatewayAddress, cBuffer );
+		FreeRTOS_printf( ( "Gateway Address: %s\n", cBuffer ) );
+
+		FreeRTOS_inet_ntoa( ulDNSServerAddress, cBuffer );
+		FreeRTOS_printf( ( "DNS Server Address: %s\n", cBuffer ) );
+	}
+}
+/*-----------------------------------------------------------*/
+
+void vApplicationMallocFailedHook( void )
+{
+volatile uint32_t ulMallocFailures = 0;
+
+	/* Called if a call to pvPortMalloc() fails because there is insufficient
+	free memory available in the FreeRTOS heap.  pvPortMalloc() is called
+	internally by FreeRTOS API functions that create tasks, queues, software
+	timers, and semaphores.  The size of the FreeRTOS heap is set by the
+	configTOTAL_HEAP_SIZE configuration constant in FreeRTOSConfig.h. */
+	ulMallocFailures++;
+}
+/*-----------------------------------------------------------*/
+
+void vApplicationStackOverflowHook( TaskHandle_t pxTask, char *pcTaskName )
+{
+	( void ) pcTaskName;
+	( void ) pxTask;
+
+	/* Run time stack overflow checking is performed if
+	configCHECK_FOR_STACK_OVERFLOW is defined to 1 or 2.  This hook
+	function is called if a stack overflow is detected. */
+	taskDISABLE_INTERRUPTS();
+	for( ;; );
+}
+
+UBaseType_t uxRand( void )
+{
+const uint32_t ulMultiplier = 0x015a4e35UL, ulIncrement = 1UL;
+static BaseType_t xInitialised = pdFALSE;
+
+	/* Don't initialise until the scheduler is running, as the timeout in the
+	random number generator uses the tick count. */
+	if( xInitialised == pdFALSE )
+	{
+		if( xTaskGetSchedulerState() !=  taskSCHEDULER_NOT_STARTED )
+		{
+		RNG_HandleTypeDef xRND;
+		uint32_t ulSeed;
+
+			/* Generate a random number with which to seed the local pseudo random
+			number generating function. */
+			HAL_RNG_Init( &xRND );
+			HAL_RNG_GenerateRandomNumber( &xRND, &ulSeed );
+			prvSRand( ulSeed );
+			xInitialised = pdTRUE;
+		}
+	}
+
+	/* Utility function to generate a pseudo random number. */
+
+	ulNextRand = ( ulMultiplier * ulNextRand ) + ulIncrement;
+	return( ( int ) ( ulNextRand >> 16UL ) & 0x7fffUL );
+}
+
+static void prvSRand( UBaseType_t ulSeed )
+{
+	/* Utility function to seed the pseudo random number generator. */
+	ulNextRand = ulSeed;
+}
+
+BaseType_t xApplicationGetRandomNumber( uint32_t * pulNumber )
+{
+    *pulNumber = uxRand();
+
+    return pdTRUE;
+}
+
+const char *pcApplicationHostnameHook( void )
+{
+	/* Assign the name "NUCLEO-F42" to this network node.  This function will be
+	called during the DHCP: the machine will be registered with an IP address
+	plus this name. */
+	return "NUCLEO-F429";
+}
+
+BaseType_t xApplicationDNSQueryHook( const char *pcName )
+{
+BaseType_t xReturn;
+	/* Determine if a name lookup is for this node.  Two names are given
+	to this node: that returned by pcApplicationHostnameHook() and that set
+	by mainDEVICE_NICK_NAME. */
+	if( strcasecmp( pcName, pcApplicationHostnameHook() ) == 0 )
+	{
+		xReturn = pdPASS;
+	}
+	else if( strcasecmp( pcName, "NUCLEO-F429" ) == 0 )
+	{
+		xReturn = pdPASS;
+	}
+	else
+	{
+		xReturn = pdFAIL;
+	}
+
+	return xReturn;
+}
+
+void vApplicationPingReplyHook( ePingReplyStatus_t eStatus, uint16_t usIdentifier )
+{
+}
+
+uint32_t ulApplicationGetNextSequenceNumber(uint32_t ulSourceAddress,
+		uint16_t usSourcePort, uint32_t ulDestinationAddress,
+		uint16_t usDestinationPort) {
+	(void) ulSourceAddress;
+	(void) usSourcePort;
+	(void) ulDestinationAddress;
+	(void) usDestinationPort;
+
+	return uxRand();
+}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
