@@ -396,6 +396,10 @@ device, and pdFALSE in all other cases.  */
 /* The local UDP port to which commands can be sent. */
 #define configUDP_LOGGING_PORT_LOCAL		2402
 
+#define USE_IPERF                               1
+#define ipconfigIPERF_DOES_ECHO_UDP		        0
+#define ipconfigIPERF_VERSION					3
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

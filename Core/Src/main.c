@@ -27,6 +27,7 @@
 #include "FreeRTOS_IP.h"
 #include "SimpleTCPEchoServer.h"
 #include "UDPLoggingPrintf.h"
+#include "iperf_task.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -493,6 +494,7 @@ static void prvServerWorkTask( void *pvParameters )
 			/* Start a new task to fetch logging lines and send them out.
 			See FreeRTOSConfig.h for the configuration of UDP logging. */
 			vUDPLoggingTaskCreate();
+			vIPerfInstall();
 			#if( USE_LOG_EVENT != 0 )
 			{
 				iEventLogInit();
