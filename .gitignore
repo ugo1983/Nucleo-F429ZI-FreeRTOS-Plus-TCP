@@ -36,7 +36,8 @@
 *.x86_64
 *.hex
 
-# Debug files
+# Debug files and folders
+Debug/
 *.dSYM/
 *.su
 *.idb
