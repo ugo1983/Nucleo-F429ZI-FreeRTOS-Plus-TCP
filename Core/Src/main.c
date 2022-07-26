@@ -26,6 +26,7 @@
 
 #include "FreeRTOS_IP.h"
 #include "SimpleTCPEchoServer.h"
+#include "UDPLoggingPrintf.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -76,6 +77,7 @@ void StartDefaultTask(void const * argument);
 
 static void prvInitialiseHeap( void );
 static void prvSRand( UBaseType_t ulSeed );
+static void prvServerWorkTask( void *pvParameters );
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -143,6 +145,7 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
+  xTaskCreate( prvServerWorkTask, "SvrWork", 640, NULL, 1, NULL );
   /* USER CODE END RTOS_THREADS */
 
   /* Start scheduler */
@@ -470,6 +473,42 @@ uint32_t ulApplicationGetNextSequenceNumber(uint32_t ulSourceAddress,
 	(void) usDestinationPort;
 
 	return uxRand();
+}
+
+static void prvServerWorkTask( void *pvParameters )
+{
+#if( CONTINUOUS_PING != 0 )
+	/* CONTINUOUS_PING can be used while testing the network driver. */
+	uint32_t ulIPAddress = FreeRTOS_inet_addr_quick( 192, 168, 2, 5 );
+	size_t uxNumberOfBytesToSend = 16;
+	TickType_t uxBlockTimeTicks = ipMS_TO_MIN_TICKS( 100U );
+#endif	/* ( CONTINUOUS_PING != 0 ) */
+
+	for( ;; )
+	{
+		vTaskDelay( 10U );
+		if( xDoCreateSockets != pdFALSE )
+		{
+			xDoCreateSockets = pdFALSE;
+			/* Start a new task to fetch logging lines and send them out.
+			See FreeRTOSConfig.h for the configuration of UDP logging. */
+			vUDPLoggingTaskCreate();
+			#if( USE_LOG_EVENT != 0 )
+			{
+				iEventLogInit();
+			}
+			#endif
+		}
+
+		#if( CONTINUOUS_PING != 0 )
+		{
+			if( xTasksAlreadyCreated != pdFALSE )
+			{
+				FreeRTOS_SendPingRequest( ulIPAddress, uxNumberOfBytesToSend, uxBlockTimeTicks );
+			}
+		}
+		#endif
+	}
 }
 /* USER CODE END 4 */
 

@@ -364,7 +364,7 @@ extern int lUDPLoggingPrintf( const char *pcFormatString, ... );
 /* Set to 1 to print out debug messages.  If ipconfigHAS_DEBUG_PRINTF is set to
 1 then FreeRTOS_debug_printf should be defined to the function used to print
 out the debugging messages. */
-#define ipconfigHAS_DEBUG_PRINTF	0
+#define ipconfigHAS_DEBUG_PRINTF	1
 #if( ipconfigHAS_DEBUG_PRINTF == 1 )
 	#define FreeRTOS_debug_printf(X)	lUDPLoggingPrintf X
 #endif
@@ -373,7 +373,7 @@ out the debugging messages. */
 FreeRTOS_netstat() command, and ping replies.  If ipconfigHAS_PRINTF is set to 1
 then FreeRTOS_printf should be set to the function used to print out the
 messages. */
-#define ipconfigHAS_PRINTF			0
+#define ipconfigHAS_PRINTF			1
 #if( ipconfigHAS_PRINTF == 1 )
 	#define FreeRTOS_printf(X)			lUDPLoggingPrintf X
 #endif
@@ -390,6 +390,11 @@ device, and pdFALSE in all other cases.  */
 #define ipconfigDNS_USE_CALLBACKS			1
 #define ipconfigSUPPORT_SIGNALS				1
 
+/* The UDP port to which the UDP logging facility sends messages. */
+#define configUDP_LOGGING_PORT_REMOTE		2403
+
+/* The local UDP port to which commands can be sent. */
+#define configUDP_LOGGING_PORT_LOCAL		2402
 
 #ifdef __cplusplus
 } /* extern "C" */
