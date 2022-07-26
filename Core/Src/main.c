@@ -25,6 +25,7 @@
 /* USER CODE BEGIN Includes */
 
 #include "FreeRTOS_IP.h"
+#include "SimpleTCPEchoServer.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -34,6 +35,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define mainECHO_SERVER_TASK_PRIORITY	( tskIDLE_PRIORITY + 2 )
+#define	mainECHO_SERVER_STACK_SIZE		( configMINIMAL_STACK_SIZE * 4 )
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -334,6 +337,7 @@ char cBuffer[ 16 ];
 		if( xTasksAlreadyCreated == pdFALSE )
 		{
 			/* Tasks that use the TCP/IP stack can be created here. */
+			vStartSimpleTCPServerTasks( mainECHO_SERVER_STACK_SIZE, mainECHO_SERVER_TASK_PRIORITY );
 			xTasksAlreadyCreated = pdTRUE;
 			xDoCreateSockets = pdTRUE;
 		}
