@@ -51,3 +51,6 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+.settings/language.settings.xml
+.settings/stm32cubeide.project.prefs
