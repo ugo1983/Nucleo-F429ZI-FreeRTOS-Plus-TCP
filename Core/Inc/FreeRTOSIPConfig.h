@@ -390,6 +390,10 @@ device, and pdFALSE in all other cases.  */
 #define ipconfigDNS_USE_CALLBACKS			1
 #define ipconfigSUPPORT_SIGNALS				1
 
+#define ipconfigMULTI_INTERFACE             1
+#define ipconfigCOMPATIBLE_WITH_SINGLE      1
+#define ipconfigUSE_DHCPv6                  0
+
 
 #ifdef __cplusplus
 } /* extern "C" */
